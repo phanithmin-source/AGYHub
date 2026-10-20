@@ -1,49 +1,50 @@
-# ai-locker
+# AGYHub
 
-Keep several Claude Code logins in an encrypted vault and switch the active one with a single command. Works on Windows and macOS (and Linux).
+Keep several Antigravity AI (`agy`) logins in an encrypted vault and switch the active one with a single command. Works on Windows and macOS (and Linux).
 
 ## Install
 
 ```sh
-npm install -g @anantbot/ai-locker
+npm install -g agyhub
 ```
 
-This installs the `ai-locker` command:
+This installs the `agyhub` command (aliases: `agy-hub`, `ai-locker`):
 
 ```sh
-ai-locker init                    # create the vault, choose a passphrase
-ai-locker add work --from-live    # save the account you're logged in with now
-ai-locker add personal            # log in to another account and save it
-ai-locker use work                # switch Claude Code to "work"
-ai-locker status --usage          # active account + session/weekly usage
+agyhub init                    # create the vault, choose a passphrase
+agyhub add work --from-live    # save the account you're logged in with now
+agyhub add personal            # log in to another account and save it
+agyhub use work                # switch Antigravity to "work"
+agyhub status                  # active account + token details
 ```
 
-To try it without installing, put `npx @anantbot/ai-locker` in front of any command, for example `npx @anantbot/ai-locker use work`. To update later, run `npm update -g @anantbot/ai-locker`.
+To try it without installing, put `npx agyhub` in front of any command, for example `npx agyhub use work`.
 
 ## How it works
 
-Claude Code keeps exactly one login per configuration directory:
+Antigravity CLI (`agy`) integrates with your operating system's native secure keyring architecture to store its active session and OAuth tokens:
 
 | OS | Live credential store | Account info |
 |---|---|---|
-| Windows / Linux | `~/.claude/.credentials.json` (plaintext, user-only ACL / mode 0600) | `oauthAccount` in `~/.claude.json` |
-| macOS | Keychain item `Claude Code-credentials` | `oauthAccount` in `~/.claude.json` |
+| Windows | Windows Credential Manager (`gemini:antigravity`) | Embedded ID token JWT (claims: email, name, sub...) |
+| macOS | Keychain item `gemini` (account `antigravity`) | Embedded ID token JWT (claims: email, name, sub...) |
+| Linux | Secret Service (`service=gemini`, `account=antigravity`) | Embedded ID token JWT (claims: email, name, sub...) |
 
-`ai-locker` stores every account in its own encrypted vault and, on `use`, swaps the chosen one into that single live slot. It never runs `/logout` (which may revoke tokens server-side); it only moves credentials.
+`AGYHub` stores every account in its own encrypted vault and, on `use`, swaps the chosen one into that live slot. It never revokes tokens server-side; it moves credentials transactionally.
 
-Claude Code refreshes its tokens while it runs. Before overwriting the live slot, `ai-locker` saves the current login back into the vault, so the copy you switch back to is always the newest one.
+Antigravity refreshes its tokens while it runs. Before overwriting the live slot, `AGYHub` saves the current login back into the vault, so the copy you switch back to is always the newest one.
 
-A switch is a small transaction:
+A switch is a safe transaction:
 
-1. Refuse if any Claude Code process is running, since it could write old tokens back (`--force` overrides).
+1. Refuse if any `agy` / `antigravity` process is running, since it could write old tokens back (`--force` overrides).
 2. Save the live login into the vault. A login that isn't saved yet is never overwritten silently: you're asked to save it, or you pass `--save-live-as <name>` or `--discard-live`.
 3. Write an encrypted rollback record.
-4. Write the target profile's credentials and `oauthAccount`.
-5. Verify with `claude auth status --json`, checking that the email matches. On failure the previous login is restored automatically.
+4. Write the target profile's credentials into the OS keyring.
+5. Verify that the credentials match the expected email and account. On failure, the previous login is restored automatically.
 
-If the process is killed partway through, `ai-locker doctor` reports it and `ai-locker rollback` restores the previous login. Until then, other commands that change the login refuse to run, so the saved login can't be overwritten. Pressing Ctrl+C during `add` cancels the login, and `ai-locker` still restores your previous account.
+If the process is killed partway through, `agyhub doctor` reports it and `agyhub rollback` restores the previous login. Until then, other commands that change the login refuse to run, so the saved login cannot be corrupted or overwritten.
 
-`ai-locker` only launches `claude` from absolute `PATH` entries, never from the current directory, so a `claude.exe` planted in a cloned repo is never run.
+`AGYHub` only launches `agy` from absolute `PATH` entries, never from the current directory, so an `agy.exe` planted in a cloned repo is never run.
 
 ## Security model
 
@@ -52,56 +53,51 @@ passphrase ──Argon2id (64 MiB, t=3) or scrypt──▶ KEK ──AES-256-GCM
 VDK ──HKDF-SHA256(purpose, id)──▶ per-file key ──AES-256-GCM (AAD = vault id + purpose + id)──▶ vault files
 ```
 
-- **Stolen `~/.ai-locker` is useless without the passphrase.** Every profile, the profile list (names, emails), and the rollback record are encrypted. Each file is bound to its id, so blobs can't be swapped between profiles.
-- **OS unlock (optional, on by default).** A copy of the data key is protected by Windows DPAPI (CurrentUser) or the macOS login Keychain, so routine commands don't prompt. It only decrypts for your OS user on this machine. Turn it off with `ai-locker config os-unlock off`, or bypass it for one command with `--strict`.
-- **The active login is as exposed as Claude Code makes it.** Claude Code needs it in its own store to work. `ai-locker lock` moves it into the vault and leaves Claude Code logged out; `ai-locker unlock` brings it back.
-- **Secrets never touch argv, logs, or `--json` output.** Keys go to PowerShell or `security` over stdin. One exception: on macOS, a credentials payload too large for `security -i` (many MCP connector tokens) is passed as an argument, where only processes of the same user can see it, and those can already query the Keychain.
-- **Zero native dependencies.** Crypto comes from Node's built-in `crypto`. OS key stores are reached through the in-box `powershell.exe` and `/usr/bin/security`, so installing needs no build tools.
-- `~/.ai-locker` is created with mode 0700 on macOS/Linux, and with an ACL granting only your user on Windows.
-
-What it does not protect against: malware already running as your user while the vault is unlocked (OS unlock on) or while a login is active. That is the same exposure Claude Code's own storage has.
+- **Stolen `~/.agyhub` is useless without the passphrase.** Every profile, the profile list (names, emails), and the rollback record are encrypted. Each file is bound to its id, so blobs cannot be swapped between profiles.
+- **OS unlock (optional, on by default).** A copy of the data key is protected by Windows DPAPI (CurrentUser) or the macOS login Keychain, so routine commands don't prompt. It only decrypts for your OS user on this machine. Turn it off with `agyhub config os-unlock off`, or bypass it for one command with `--strict`.
+- **The active login is as exposed as Antigravity makes it.** Antigravity needs it in its OS keyring slot to work. `agyhub lock` moves it into the vault and leaves Antigravity logged out; `agyhub unlock` brings it back.
+- **Secrets never touch argv, logs, or `--json` output.** Secrets and keys pass over stdin in base64.
+- **Zero native dependencies.** Crypto comes from Node's built-in `crypto`. OS key stores are reached through the in-box `powershell.exe` on Windows and `/usr/bin/security` on macOS, so installing needs no C++ build tools.
+- `~/.agyhub` is created with mode 0700 on macOS/Linux, and with an ACL granting only your user on Windows.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `init [--no-os-unlock] [--scrypt]` | Create the vault. |
-| `add <name>` | Save the current login (if unsaved), log Claude Code out locally, run `claude auth login`, and save the new account. Options: `--email`, `--sso`, `--console`, `--manual` (log in yourself in another terminal). |
+| `init [--no-os-unlock] [--scrypt]` | Create the encrypted vault. |
+| `add <name>` | Save current login (if unsaved), log out locally, run login flow, and save the new account. Options: `--email`, `--sso`, `--console`, `--manual`. |
 | `add <name> --from-live` | Save the account that is logged in right now. |
-| `use [profile]` | Switch to a profile (picker if omitted). Alias `switch`. |
-| `list` / `ls` | List profiles (`*` marks the active one). |
-| `status [--usage]` | Active profile, live login, token expiry; `--usage` fetches usage windows from Anthropic. |
+| `use [profile]` | Switch to a profile (interactive picker if omitted). Alias `switch`. |
+| `list` / `ls` | List saved profiles (`*` marks the active one). |
+| `status` | Active profile, live login, and token expiry details. |
 | `lock` / `unlock` | Move the live login into the vault, or restore it. |
 | `rename <profile> <new>` / `remove <profile>` | Manage profiles. |
 | `export <file>` / `import <file>` | Move profiles to another machine, encrypted with a separate passphrase. |
-| `passphrase` | Change the vault passphrase and rotate the data key. Every profile is re-encrypted, crash-safely, so an old `vault.json` plus a leaked old passphrase can't read anything newer. |
-| `config show` / `config os-unlock on\|off` | Vault settings. |
+| `passphrase` | Change the vault passphrase and rotate the data key. Every profile is re-encrypted crash-safely. |
+| `config show` / `config os-unlock on\|off` | View or change vault settings. |
 | `rollback` | Restore the login saved before an interrupted operation. |
-| `doctor` | Diagnose the vault, permissions, Claude Code install, and running sessions. |
+| `doctor` | Diagnose the vault, permissions, Antigravity install, and running sessions. |
 
 Global flags: `--json` for machine-readable output, `--strict` to always ask for the passphrase.
 
-Environment variables: `AI_LOCKER_HOME` (vault location, default `~/.ai-locker`), `AI_LOCKER_PASSPHRASE` (non-interactive unlock, e.g. CI), `AI_LOCKER_EXPORT_PASSPHRASE`, `AI_LOCKER_CLAUDE_BIN`. `CLAUDE_CONFIG_DIR` is respected the same way Claude Code respects it, including the hashed macOS Keychain item name.
+Environment variables: `AGYHUB_HOME` (vault location, default `~/.agyhub`), `AGYHUB_PASSPHRASE` (non-interactive unlock, e.g. CI), `AGYHUB_EXPORT_PASSPHRASE`, `AI_LOCKER_AGY_BIN`. (Legacy `AI_LOCKER_*` variables are also supported for backwards compatibility).
 
 ## Caveats
 
-- **Quit Claude Code before switching.** That includes the VS Code/JetBrains extensions. A running session keeps its old tokens in memory and may write them back.
-- **Don't use one login on two machines at once.** When one copy refreshes, the other copy's refresh token stops working. `export` is for moving a login, not cloning it.
-- **Environment overrides win.** If `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` is set, Claude Code ignores the stored login, so switching has no visible effect. `doctor` warns about this.
-- **MCP connector tokens are per profile.** They live in the same credentials file, so they switch along with the account.
-- **One active account at a time.** Running two accounts in parallel through separate `CLAUDE_CONFIG_DIR`s is unreliable on macOS when tokens are copied rather than created by a fresh login, so this tool deliberately swaps a single slot.
-- `status --usage` calls an undocumented Anthropic endpoint (`/api/oauth/usage`) with the profile's own access token. Its format may change.
+- **Quit Antigravity (`agy`) before switching.** A running CLI session keeps tokens in memory and may write them back.
+- **Don't use one login on two machines simultaneously.** When one copy refreshes, the other copy's refresh token can be invalidated. `export` is for transferring an account, not duplicating it.
+- **Environment overrides win.** If `GEMINI_API_KEY`, `AGY_ADC_AUTH` or `GOOGLE_APPLICATION_CREDENTIALS` is set, Antigravity may ignore the stored login. `agyhub doctor` warns if these are set.
 
 ## Development
 
 ```sh
 npm install
-npm test          # vitest: crypto, vault, stores, switch transactions (temp dirs only)
+npm test          # vitest: crypto, vault, agy provider, switch transactions (temp dirs only)
 npm run build     # tsup -> dist/cli.js
 node dist/cli.js --help
 ```
 
-Tests never touch your real `~/.claude`. They use temp directories and a fake provider. CI runs on Windows, macOS, and Linux with Node 20 and 24.
+Tests never touch your real credentials. They use isolated temporary directories and mock stores.
 
 ## License
 

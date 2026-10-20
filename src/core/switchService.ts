@@ -19,7 +19,7 @@ export interface UnknownLivePolicy {
 }
 
 export interface GuardOptions extends UnknownLivePolicy {
-  /** Proceed even if Claude Code is running. */
+  /** Proceed even if the provider is running. */
   force?: boolean;
   /** Confirm the result with the provider's own CLI (default true). */
   verify?: boolean;
@@ -38,7 +38,7 @@ export async function ensureNotRunning(provider: Provider<any>, force?: boolean)
     throw new LockerError(
       `${provider.displayName} is running: ${list}.`,
       'E_RUNNING',
-      `Quit every ${provider.displayName} session (including IDE extensions) so it can't write old tokens back, then retry. Use --force to skip this check.`,
+      `Quit every ${provider.displayName} session so it can't write old tokens back, then retry. Use --force to skip this check.`,
     );
   }
 }
@@ -53,13 +53,13 @@ async function assertNoPendingRollback(vault: Vault): Promise<void> {
     throw new LockerError(
       `A previous operation ("${pending.reason}", ${pending.takenAt}) was interrupted.`,
       'E_PENDING_ROLLBACK',
-      'Run `ai-locker rollback` to restore the login saved before it, then retry.',
+      'Run `agyhub rollback` to restore the login saved before it, then retry.',
     );
   }
 }
 
 /**
- * Save the live login back into the vault. Tokens rotate while Claude Code runs, so this
+ * Save the live login back into the vault. Tokens rotate while the provider runs, so this
  * must happen before anything overwrites the live store, or the saved copy goes stale.
  */
 export async function captureLive(ctx: Ctx, policy: UnknownLivePolicy = {}): Promise<CaptureResult> {
@@ -168,7 +168,7 @@ export interface AddResult {
 
 /**
  * Log in to a new account without ever calling logout: save the current login, empty the
- * live store, let Claude Code's own login flow fill it, then encrypt what it wrote.
+ * live store, let the provider's own login flow fill it, then encrypt what it wrote.
  */
 export async function addViaLogin(ctx: Ctx, name: string, opts: AddOptions = {}): Promise<AddResult> {
   const { vault, provider } = ctx;
@@ -234,7 +234,7 @@ export async function addFromLive(ctx: Ctx, name: string): Promise<ProfileMeta> 
   assertNameFree(vault.manifest, provider.id, name);
   const live = await provider.readLive();
   if (!live || !provider.hasLogin(live)) {
-    throw new LockerError(`${provider.displayName} is not logged in.`, 'E_NO_LIVE', 'Log in first, or use `ai-locker add <name>`.');
+    throw new LockerError(`${provider.displayName} is not logged in.`, 'E_NO_LIVE', 'Log in first, or use `agyhub add <name>`.');
   }
   const fp = provider.fingerprint(live);
   const identity = provider.identity(live);
@@ -246,7 +246,7 @@ export async function addFromLive(ctx: Ctx, name: string): Promise<ProfileMeta> 
     throw new LockerError(
       `This login is already saved as "${existing.name}" (refreshed it).`,
       'E_EXISTS',
-      `Rename it with \`ai-locker rename ${existing.name} ${name}\` if you prefer the new name.`,
+      `Rename it with \`agyhub rename ${existing.name} ${name}\` if you prefer the new name.`,
     );
   }
   const meta = newProfileMeta(name, provider.id, fp, identity);

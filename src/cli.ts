@@ -9,8 +9,8 @@ import pkg from '../package.json' with { type: 'json' };
 
 const program = new Command();
 program
-  .name('ai-locker')
-  .description('Keep several Claude Code logins in an encrypted vault and switch between them.')
+  .name('agyhub')
+  .description('AGYHub — Keep several Antigravity (agy) logins in an encrypted vault and switch between them.')
   .version(pkg.version)
   .option('--json', 'machine-readable output (tokens are never printed)')
   .option('--strict', 'ignore the OS key cache and always ask for the passphrase')
@@ -26,13 +26,13 @@ program.addHelpText(
   'after',
   `
 Examples:
-  ai-locker init                    create the vault
-  ai-locker add work --from-live    save the account you're logged in with
-  ai-locker add personal            log in to another account and save it
-  ai-locker use work                switch Claude Code to "work"
-  ai-locker status --usage          active account and usage windows
+  agyhub init                    create the vault
+  agyhub add work --from-live    save the account you're logged in with
+  agyhub add personal            log in to another account and save it
+  agyhub use work                switch Antigravity to "work"
+  agyhub status                  active account and token status
 
-Install the ai-locker command once with: npm install -g @anantbot/ai-locker`,
+Install the agyhub command once with: npm install -g agyhub`,
 );
 
 async function main(): Promise<void> {
@@ -67,7 +67,8 @@ function report(err: unknown): number {
     process.stdout.write(JSON.stringify({ error: { code: 'E_INTERNAL', message } }, null, 2) + '\n');
   } else {
     process.stderr.write(`${c.red('✖')} ${message}\n`);
-    if (process.env.AI_LOCKER_DEBUG && err instanceof Error) process.stderr.write(`${err.stack}\n`);
+    const debug = process.env.AGYHUB_DEBUG || process.env.AI_LOCKER_DEBUG;
+    if (debug && err instanceof Error) process.stderr.write(`${err.stack}\n`);
   }
   return 1;
 }

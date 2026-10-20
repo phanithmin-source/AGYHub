@@ -14,8 +14,8 @@ import { publicMeta } from './profiles.js';
 export function registerInspect(program: Command): void {
   program
     .command('status')
-    .description('show the active profile and the live Claude Code login')
-    .option('-u, --usage', 'also fetch session/weekly usage for each profile (contacts api.anthropic.com)')
+    .description('show the active profile and the live login')
+    .option('-u, --usage', 'fetch usage if supported by the provider')
     .action(async (opts: { usage?: boolean }, cmd: Command) => {
       const g = cmd.optsWithGlobals<GlobalOpts>();
       await withVault(g, async ({ vault, provider }) => {
@@ -58,13 +58,17 @@ export function registerInspect(program: Command): void {
           if (liveId) {
             const saved = liveMatch ? c.green(`saved as "${liveMatch.name}"`) : c.yellow('NOT saved in the vault');
             info(`${c.bold('Live login')}      ${liveId.email ?? 'unknown email'} (${liveId.plan ?? '?'}) — ${saved}`);
-            info(`${c.bold('Access token')}    expires ${relTime(liveId.tokenExpiresAt)} (Claude Code refreshes it)`);
-            info(`${c.bold('Login')}           expires ${relTime(liveId.refreshExpiresAt)}`);
+            if (liveId.tokenExpiresAt) {
+              info(`${c.bold('Access token')}    expires ${relTime(liveId.tokenExpiresAt)}`);
+            }
+            if (liveId.refreshExpiresAt) {
+              info(`${c.bold('Login')}           expires ${relTime(liveId.refreshExpiresAt)}`);
+            }
           } else {
             info(`${c.bold('Live login')}      ${c.dim('none (logged out)')}`);
           }
           info(`${c.bold('Store')}           ${data.store.kind}: ${data.store.location}`);
-          if (opts.usage) {
+          if (opts.usage && Object.keys(usage).length > 0) {
             info('');
             for (const [name, report] of Object.entries(usage)) {
               if (!report.ok) {
@@ -85,7 +89,7 @@ export function registerInspect(program: Command): void {
 
   program
     .command('doctor')
-    .description('diagnose the vault, permissions and Claude Code setup')
+    .description('diagnose the vault, permissions and setup')
     .action(async (_opts, cmd: Command) => {
       const g = cmd.optsWithGlobals<GlobalOpts>();
       const paths = lockerPaths();
@@ -94,7 +98,7 @@ export function registerInspect(program: Command): void {
       checks.push({ name: 'Platform', status: 'info', detail: `${process.platform} ${process.arch}` });
 
       if (!Vault.exists(paths)) {
-        checks.push({ name: 'Vault', status: 'warn', detail: `none at ${paths.home}; run \`ai-locker init\`` });
+        checks.push({ name: 'Vault', status: 'warn', detail: `none at ${paths.home}; run \`agyhub init\`` });
       } else {
         checks.push({ name: 'Vault', status: 'ok', detail: paths.home });
         const access = describeDirAccess(paths.home);
@@ -107,7 +111,7 @@ export function registerInspect(program: Command): void {
           checks.push({
             name: 'Interrupted operation',
             status: 'warn',
-            detail: 'a rollback snapshot exists; run `ai-locker rollback` to restore the login from before it',
+            detail: 'a rollback snapshot exists; run `agyhub rollback` to restore the login from before it',
           });
         }
         try {
@@ -119,7 +123,7 @@ export function registerInspect(program: Command): void {
             });
             for (const p of vault.manifest.profiles.filter((x) => x.provider === provider.id)) {
               if (p.refreshExpiresAt && p.refreshExpiresAt < Date.now()) {
-                checks.push({ name: `Profile ${p.name}`, status: 'warn', detail: 'login expired; re-add it with `ai-locker add`' });
+                checks.push({ name: `Profile ${p.name}`, status: 'warn', detail: 'login expired; re-add it with `agyhub add`' });
               } else if (p.refreshExpiresAt && p.refreshExpiresAt - Date.now() < 3 * 86_400_000) {
                 checks.push({ name: `Profile ${p.name}`, status: 'warn', detail: `login expires ${relTime(p.refreshExpiresAt)}` });
               }

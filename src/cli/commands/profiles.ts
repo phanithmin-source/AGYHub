@@ -9,7 +9,7 @@ import { checkPassphrase, type ProfileMeta } from '../../vault/vault.js';
 import { addFromLive, addViaLogin, captureSummary } from '../../core/switchService.js';
 import { assertNameFree, describeProfile, requireProfile, validateName } from '../../core/profiles.js';
 import { exportProfiles, importProfiles } from '../../core/transfer.js';
-import { validateLoginEmail } from '../../providers/claude-code/index.js';
+import { validateLoginEmail } from '../../providers/agy/index.js';
 import { isInteractive, livePolicy, promptPassphrase, withVault, type GlobalOpts, type LivePolicyFlags } from '../context.js';
 
 interface AddFlags extends LivePolicyFlags {
@@ -43,15 +43,15 @@ export function registerProfiles(program: Command): void {
   program
     .command('add <name>')
     .description('save an account: log in to a new one, or --from-live to save the current login')
-    .option('--from-live', 'save the account Claude Code is logged in with right now')
-    .option('--manual', 'do not launch the login; wait while you run `claude auth login` yourself')
+    .option('--from-live', 'save the account that is logged in right now')
+    .option('--manual', 'do not launch the login; wait while you log in yourself in another terminal')
     .option('--email <email>', 'pre-fill the login email')
     .option('--sso', 'force SSO login')
-    .option('--console', 'log in with an Anthropic Console account (API billing)')
+    .option('--console', 'log in with console / cloud account')
     .option('--save-live-as <name>', 'if the current login is not saved yet, save it under this name first')
     .option('--discard-live', 'if the current login is not saved yet, drop it')
-    .option('--force', 'skip the "Claude Code is running" check')
-    .option('--no-verify', 'skip `claude auth status` verification')
+    .option('--force', 'skip the running process check')
+    .option('--no-verify', 'skip login verification')
     .action(async (name: string, flags: AddFlags, cmd: Command) => {
       const g = cmd.optsWithGlobals<GlobalOpts>();
       validateName(name);
@@ -64,14 +64,15 @@ export function registerProfiles(program: Command): void {
           );
           return;
         }
+        const loginCmd = ctx.provider.id === 'agy' ? 'agy' : 'claude auth login';
         const manual = flags.manual
           ? async () => {
               if (!isInteractive()) throw new LockerError('--manual needs an interactive terminal.', 'E_ARGS');
-              note(`\nClaude Code is now logged out. In another terminal run:\n\n    ${c.cyan('claude auth login')}\n`);
+              note(`\n${ctx.provider.displayName} is now logged out. In another terminal run:\n\n    ${c.cyan(loginCmd)}\n`);
               await input({ message: 'Press Enter once the login has finished' });
             }
           : undefined;
-        if (!manual) note(c.dim('Starting `claude auth login`. Sign in with the account to save as ') + c.bold(name));
+        if (!manual) note(c.dim(`Starting login for ${ctx.provider.displayName}. Sign in with the account to save as `) + c.bold(name));
         const res = await addViaLogin(ctx, name, {
           ...livePolicy(flags),
           force: flags.force,
@@ -103,7 +104,7 @@ export function registerProfiles(program: Command): void {
         const profiles = vault.manifest.profiles.filter((p) => p.provider === provider.id);
         emit(g, { profiles: profiles.map((p) => publicMeta(p, activeId)) }, () => {
           if (profiles.length === 0) {
-            info('No profiles yet. Run `ai-locker add <name> --from-live` or `ai-locker add <name>`.');
+            info('No profiles yet. Run `agyhub add <name> --from-live` or `agyhub add <name>`.');
             return;
           }
           const rows = profiles.map((p) => [
@@ -141,7 +142,7 @@ export function registerProfiles(program: Command): void {
   program
     .command('remove <profile>')
     .alias('rm')
-    .description('delete a saved profile from the vault (does not log Claude Code out)')
+    .description('delete a saved profile from the vault (does not log out active session)')
     .option('-y, --yes', 'do not ask for confirmation')
     .action(async (ref: string, opts: { yes?: boolean }, cmd: Command) => {
       const g = cmd.optsWithGlobals<GlobalOpts>();
@@ -161,7 +162,7 @@ export function registerProfiles(program: Command): void {
         await vault.audit(`remove ${provider.id} ${p.id}`);
         emit(g, { removed: p.name, wasActive }, () => {
           info(c.green('✔ ') + `Removed ${p.name}.`);
-          if (wasActive) info(c.dim('It was active, so Claude Code is still logged in with it until you switch or lock.'));
+          if (wasActive) info(c.dim(`It was active, so ${provider.displayName} is still logged in with it until you switch or lock.`));
         });
       });
     });
@@ -207,10 +208,10 @@ export function registerProfiles(program: Command): void {
 }
 
 async function exportPassphrase(confirmTwice: boolean): Promise<string> {
-  const fromEnv = process.env.AI_LOCKER_EXPORT_PASSPHRASE;
+  const fromEnv = process.env.AGYHUB_EXPORT_PASSPHRASE ?? process.env.AI_LOCKER_EXPORT_PASSPHRASE;
   if (fromEnv !== undefined) return fromEnv;
   if (!isInteractive()) {
-    throw new LockerError('An export passphrase is required.', 'E_NEED_PASSPHRASE', 'Set AI_LOCKER_EXPORT_PASSPHRASE.');
+    throw new LockerError('An export passphrase is required.', 'E_NEED_PASSPHRASE', 'Set AGYHUB_EXPORT_PASSPHRASE.');
   }
   for (;;) {
     const first = await promptPassphrase('Export file passphrase');

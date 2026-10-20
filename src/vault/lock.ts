@@ -39,7 +39,7 @@ function acquire(lockPath: string, retried = false): void {
     }
     if (holder.pid && pidAlive(holder.pid)) {
       throw new LockerError(
-        `Another ai-locker process (pid ${holder.pid}) is using the vault.`,
+        `Another agyhub process (pid ${holder.pid}) is using the vault.`,
         'E_BUSY',
         'Wait for it to finish and try again.',
       );

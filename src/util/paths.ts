@@ -1,9 +1,17 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** Root of ai-locker's own state. Override with AI_LOCKER_HOME (used by tests). */
+/** Root of AGYHub's own state. Override with AGYHUB_HOME or AI_LOCKER_HOME (used by tests). */
 export function lockerHome(env: NodeJS.ProcessEnv = process.env): string {
-  return env.AI_LOCKER_HOME || path.join(os.homedir(), '.ai-locker');
+  if (env.AGYHUB_HOME) return env.AGYHUB_HOME;
+  if (env.AI_LOCKER_HOME) return env.AI_LOCKER_HOME;
+  const agyHome = path.join(os.homedir(), '.agyhub');
+  const legacyHome = path.join(os.homedir(), '.ai-locker');
+  if (fs.existsSync(legacyHome) && !fs.existsSync(agyHome)) {
+    return legacyHome;
+  }
+  return agyHome;
 }
 
 export function lockerPaths(home = lockerHome()) {

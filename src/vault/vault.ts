@@ -42,7 +42,7 @@ export interface RollbackRecord {
 }
 
 interface VaultFile {
-  format: 'ai-locker-vault';
+  format: 'agyhub-vault' | 'ai-locker-vault';
   schema: 1;
   vaultId: string;
   createdAt: string;
@@ -112,7 +112,7 @@ export class Vault {
     const vdk = crypto.randomBytes(32);
     const manifest: Manifest = { profiles: [], active: {}, lastActive: {} };
     const file: VaultFile = {
-      format: 'ai-locker-vault',
+      format: 'agyhub-vault',
       schema: 1,
       vaultId,
       createdAt: new Date().toISOString(),
@@ -140,7 +140,7 @@ export class Vault {
   static async unlock(paths: LockerPaths, opts: UnlockOptions): Promise<Vault> {
     const raw = await readIfExists(paths.vault);
     if (raw === null) {
-      throw new LockerError('No vault found.', 'E_NO_VAULT', 'Run `ai-locker init` first.');
+      throw new LockerError('No vault found.', 'E_NO_VAULT', 'Run `agyhub init` first.');
     }
     const file = parseVaultFile(raw);
 
@@ -343,7 +343,7 @@ function parseVaultFile(raw: string): VaultFile {
   } catch {
     throw new LockerError('vault.json is not valid JSON.', 'E_FORMAT');
   }
-  if (parsed.format !== 'ai-locker-vault' || parsed.schema !== 1 || !parsed.vaultId || !parsed.kdf || !parsed.wrappedVdk || !parsed.manifest) {
+  if ((parsed.format !== 'agyhub-vault' && parsed.format !== 'ai-locker-vault') || parsed.schema !== 1 || !parsed.vaultId || !parsed.kdf || !parsed.wrappedVdk || !parsed.manifest) {
     throw new LockerError('vault.json has an unsupported format or schema version.', 'E_FORMAT');
   }
   return parsed as VaultFile;

@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { addFromLive, addViaLogin, captureLive, lockLive, rollback, switchTo, type Ctx } from '../src/core/switchService.js';
 import { requireProfile } from '../src/core/profiles.js';
 import { exportProfiles, importProfiles } from '../src/core/transfer.js';
-import { FakeClaude, newVault } from './helpers.js';
+import { FakeAgy, newVault } from './helpers.js';
 
 async function setup() {
-  const fake = new FakeClaude();
+  const fake = new FakeAgy();
   const { vault, paths } = await newVault();
   const ctx: Ctx = { vault, provider: fake.provider() };
   return { fake, vault, paths, ctx };
@@ -27,10 +27,10 @@ describe('add --from-live', () => {
     const { fake, vault, ctx } = await setup();
     fake.loginAs('alice');
     const meta = await addFromLive(ctx, 'work');
-    expect(meta).toMatchObject({ name: 'work', email: 'alice@example.com', plan: 'max' });
-    expect(vault.manifest.active['claude-code']).toBe(meta.id);
-    expect(((await vault.readProfile(meta.id)) as any).credentials.claudeAiOauth.refreshToken).toBe(
-      'sk-ant-ort01-alice-refresh',
+    expect(meta).toMatchObject({ name: 'work', email: 'alice@example.com', plan: 'consumer' });
+    expect(vault.manifest.active['agy']).toBe(meta.id);
+    expect(((await vault.readProfile(meta.id)) as any).token.refresh_token).toBe(
+      '1//alice-refresh',
     );
   });
 
@@ -48,27 +48,25 @@ describe('add --from-live', () => {
 });
 
 describe('use', () => {
-  it('swaps credentials and account info, keeping the rest of ~/.claude.json', async () => {
+  it('swaps credentials cleanly', async () => {
     const { fake, vault, ctx } = await twoProfiles();
-    const res = await switchTo(ctx, requireProfile(vault.manifest, 'claude-code', 'bob'));
+    const res = await switchTo(ctx, requireProfile(vault.manifest, 'agy', 'bob'));
     expect(res.alreadyActive).toBe(false);
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toBe('sk-ant-ort01-bob-refresh');
-    expect(fake.globalJson().oauthAccount.emailAddress).toBe('bob@example.com');
-    expect(fake.globalJson().projects).toEqual({ '/x': { allowedTools: [] } });
-    expect(vault.manifest.active['claude-code']).toBe(res.profile.id);
+    expect(fake.liveCreds().token.refresh_token).toBe('1//bob-refresh');
+    expect(vault.manifest.active['agy']).toBe(res.profile.id);
     expect(fs.existsSync(vault.paths.rollback)).toBe(false);
   });
 
   it('captures rotated tokens before switching away, and restores them when switching back', async () => {
     const { fake, vault, ctx } = await twoProfiles();
-    fake.rotate('alice', 7); // Claude Code refreshed alice's tokens while she was active
-    const res = await switchTo(ctx, requireProfile(vault.manifest, 'claude-code', 'bob'));
+    fake.rotate('alice', 7); // Antigravity refreshed alice's tokens while she was active
+    const res = await switchTo(ctx, requireProfile(vault.manifest, 'agy', 'bob'));
     expect(res.capture.kind).toBe('updated');
-    await switchTo(ctx, requireProfile(vault.manifest, 'claude-code', 'alice'));
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toBe('sk-ant-ort01-alice-refresh-r7');
+    await switchTo(ctx, requireProfile(vault.manifest, 'agy', 'alice'));
+    expect(fake.liveCreds().token.refresh_token).toBe('1//alice-refresh-r7');
   });
 
-  it('recognises a rotated login by account even if oauthAccount is unchanged', async () => {
+  it('recognises a rotated login by account key even if tokens changed', async () => {
     const { fake, vault, ctx } = await twoProfiles();
     fake.rotate('alice', 1);
     fake.rotate('alice', 2);
@@ -79,42 +77,41 @@ describe('use', () => {
 
   it('is a no-op when the target is already active', async () => {
     const { vault, ctx } = await twoProfiles();
-    const res = await switchTo(ctx, requireProfile(vault.manifest, 'claude-code', 'alice'));
+    const res = await switchTo(ctx, requireProfile(vault.manifest, 'agy', 'alice'));
     expect(res.alreadyActive).toBe(true);
   });
 
-  it('refuses while Claude Code is running unless forced', async () => {
+  it('refuses while Antigravity is running unless forced', async () => {
     const { fake, vault, ctx } = await twoProfiles();
-    fake.running = [{ pid: 42, name: 'claude.exe' }];
-    const bob = requireProfile(vault.manifest, 'claude-code', 'bob');
+    fake.running = [{ pid: 42, name: 'agy.exe' }];
+    const bob = requireProfile(vault.manifest, 'agy', 'bob');
     await expect(switchTo(ctx, bob)).rejects.toMatchObject({ code: 'E_RUNNING' });
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toContain('alice');
+    expect(fake.liveCreds().token.refresh_token).toContain('alice');
     await switchTo(ctx, bob, { force: true });
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toContain('bob');
+    expect(fake.liveCreds().token.refresh_token).toContain('bob');
   });
 
   it('restores the previous login when verification fails', async () => {
     const { fake, vault, ctx } = await twoProfiles();
     const before = fake.liveCreds();
     fake.verifyResult = { ok: false, detail: 'simulated failure' };
-    await expect(switchTo(ctx, requireProfile(vault.manifest, 'claude-code', 'bob'))).rejects.toMatchObject({
+    await expect(switchTo(ctx, requireProfile(vault.manifest, 'agy', 'bob'))).rejects.toMatchObject({
       code: 'E_VERIFY',
     });
     expect(fake.liveCreds()).toEqual(before);
-    expect(fake.globalJson().oauthAccount.emailAddress).toBe('alice@example.com');
-    expect(vault.manifest.active['claude-code']).toBe(requireProfile(vault.manifest, 'claude-code', 'alice').id);
+    expect(vault.manifest.active['agy']).toBe(requireProfile(vault.manifest, 'agy', 'alice').id);
   });
 
   it('refuses to overwrite an unsaved login, or saves/discards it on request', async () => {
     const { fake, vault, ctx } = await twoProfiles();
-    fake.loginAs('carol'); // logged in outside ai-locker
-    const bob = requireProfile(vault.manifest, 'claude-code', 'bob');
+    fake.loginAs('carol'); // logged in outside agyhub
+    const bob = requireProfile(vault.manifest, 'agy', 'bob');
     await expect(switchTo(ctx, bob)).rejects.toMatchObject({ code: 'E_UNSAVED_LIVE' });
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toContain('carol');
+    expect(fake.liveCreds().token.refresh_token).toContain('carol');
 
     const res = await switchTo(ctx, bob, { saveUnknownAs: 'carol' });
     expect(res.capture.kind).toBe('saved-new');
-    expect(requireProfile(vault.manifest, 'claude-code', 'carol').email).toBe('carol@example.com');
+    expect(requireProfile(vault.manifest, 'agy', 'carol').email).toBe('carol@example.com');
 
     fake.loginAs('dave');
     const r2 = await switchTo(ctx, bob, { discardLive: true });
@@ -125,26 +122,26 @@ describe('use', () => {
   it('asks interactively about an unsaved login', async () => {
     const { fake, vault, ctx } = await twoProfiles();
     fake.loginAs('erin');
-    await switchTo(ctx, requireProfile(vault.manifest, 'claude-code', 'bob'), {
+    await switchTo(ctx, requireProfile(vault.manifest, 'agy', 'bob'), {
       onUnknown: async (id) => (id.email === 'erin@example.com' ? 'erin' : null),
     });
-    expect(requireProfile(vault.manifest, 'claude-code', 'erin')).toBeTruthy();
+    expect(requireProfile(vault.manifest, 'agy', 'erin')).toBeTruthy();
   });
 
   it('refuses to switch when a profile blob was tampered with, leaving the live login intact', async () => {
     const { fake, vault, ctx } = await twoProfiles();
-    const bob = requireProfile(vault.manifest, 'claude-code', 'bob');
+    const bob = requireProfile(vault.manifest, 'agy', 'bob');
     const file = vault.paths.profile(bob.id);
     const sealed = JSON.parse(fs.readFileSync(file, 'utf8'));
     sealed.tag = Buffer.alloc(16).toString('base64');
     fs.writeFileSync(file, JSON.stringify(sealed));
     await expect(switchTo(ctx, bob)).rejects.toMatchObject({ code: 'E_DECRYPT' });
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toContain('alice');
+    expect(fake.liveCreds().token.refresh_token).toContain('alice');
   });
 });
 
 describe('add via login', () => {
-  it('saves the current login, lets Claude log in fresh, then stores the new account', async () => {
+  it('saves the current login, lets Antigravity log in fresh, then stores the new account', async () => {
     const { fake, vault, ctx } = await setup();
     fake.loginAs('alice');
     await addFromLive(ctx, 'alice');
@@ -153,10 +150,10 @@ describe('add via login', () => {
     const res = await addViaLogin(ctx, 'bob');
     expect(res.capture.kind).toBe('updated');
     expect(res.profile.email).toBe('bob@example.com');
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toContain('bob');
-    const alice = requireProfile(vault.manifest, 'claude-code', 'alice');
-    expect(((await vault.readProfile(alice.id)) as any).credentials.claudeAiOauth.refreshToken).toBe(
-      'sk-ant-ort01-alice-refresh-r3',
+    expect(fake.liveCreds().token.refresh_token).toContain('bob');
+    const alice = requireProfile(vault.manifest, 'agy', 'alice');
+    expect(((await vault.readProfile(alice.id)) as any).token.refresh_token).toBe(
+      '1//alice-refresh-r3',
     );
   });
 
@@ -168,7 +165,6 @@ describe('add via login', () => {
     fake.nextLogin = null; // login exits non-zero
     await expect(addViaLogin(ctx, 'bob')).rejects.toMatchObject({ code: 'E_LOGIN' });
     expect(fake.liveCreds()).toEqual(before);
-    expect(fake.globalJson().oauthAccount.emailAddress).toBe('alice@example.com');
   });
 
   it('removes the half-created profile when verification fails after login', async () => {
@@ -180,7 +176,7 @@ describe('add via login', () => {
     await expect(addViaLogin(ctx, 'bob')).rejects.toMatchObject({ code: 'E_VERIFY' });
     expect(vault.manifest.profiles.map((p) => p.name)).toEqual(['alice']);
     expect(fs.readdirSync(vault.paths.profilesDir)).toHaveLength(1);
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toContain('alice');
+    expect(fake.liveCreds().token.refresh_token).toContain('alice');
   });
 
   it('recognises an account that is already saved', async () => {
@@ -206,25 +202,23 @@ describe('add via login', () => {
 });
 
 describe('lock / unlock / rollback', () => {
-  it('lock moves the login into the vault and logs Claude out', async () => {
+  it('lock moves the login into the vault and logs Antigravity out', async () => {
     const { fake, vault, ctx } = await twoProfiles();
     fake.rotate('alice', 9);
     const cap = await lockLive(ctx);
     expect(cap.kind).toBe('updated');
     expect(fake.liveCreds()).toBeNull();
-    expect(fake.globalJson().oauthAccount).toBeUndefined();
-    expect(vault.manifest.active['claude-code']).toBeNull();
-    const alice = requireProfile(vault.manifest, 'claude-code', 'alice');
-    expect(vault.manifest.lastActive['claude-code']).toBe(alice.id);
+    expect(vault.manifest.active['agy']).toBeNull();
+    const alice = requireProfile(vault.manifest, 'agy', 'alice');
+    expect(vault.manifest.lastActive['agy']).toBe(alice.id);
     await switchTo(ctx, alice);
-    expect(fake.liveCreds().claudeAiOauth.refreshToken).toBe('sk-ant-ort01-alice-refresh-r9');
+    expect(fake.liveCreds().token.refresh_token).toBe('1//alice-refresh-r9');
   });
 
   it('rollback restores the login captured before an interrupted operation', async () => {
     const { fake, vault, ctx } = await twoProfiles();
     const before = fake.liveCreds();
-    // Simulate a crash after the rollback record was written and the live store changed.
-    await vault.writeRollback({ provider: 'claude-code', takenAt: 't', reason: 'use bob', snapshot: await ctx.provider.readLive() });
+    await vault.writeRollback({ provider: 'agy', takenAt: 't', reason: 'use bob', snapshot: await ctx.provider.readLive() });
     fake.loginAs('bob');
     const res = await rollback(ctx);
     expect(res?.reason).toBe('use bob');
@@ -237,7 +231,7 @@ describe('export / import', () => {
   it('round-trips profiles through a separately encrypted file', async () => {
     const { vault } = await twoProfiles();
     const text = await exportProfiles(vault, vault.manifest.profiles, 'export passphrase 1');
-    expect(text).not.toContain('sk-ant');
+    expect(text).not.toContain('ya29');
     expect(text).not.toContain('alice');
 
     const other = await setup();
@@ -248,8 +242,8 @@ describe('export / import', () => {
     expect(again.imported).toHaveLength(0);
     expect(again.skipped).toHaveLength(2);
 
-    const bob = requireProfile(other.vault.manifest, 'claude-code', 'bob');
+    const bob = requireProfile(other.vault.manifest, 'agy', 'bob');
     await switchTo(other.ctx, bob);
-    expect(other.fake.liveCreds().claudeAiOauth.refreshToken).toBe('sk-ant-ort01-bob-refresh');
+    expect(other.fake.liveCreds().token.refresh_token).toBe('1//bob-refresh');
   });
 });

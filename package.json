@@ -1,19 +1,20 @@
 {
-  "name": "@anantbot/ai-locker",
+  "name": "agyhub",
   "version": "0.1.1",
-  "description": "Encrypted multi-account switcher for Claude Code. Keep several logins in a passphrase-protected vault and swap the active one with one command.",
-  "author": "KEAT PORHONG",
+  "description": "AGYHub — Encrypted multi-account switcher for Antigravity AI (agy). Keep several logins in a passphrase-protected vault and swap the active one with one command.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/porhong/ai-locker.git"
+    "url": "git+https://github.com/phanithmin-source/AGYHub.git"
   },
-  "homepage": "https://github.com/porhong/ai-locker#readme",
+  "homepage": "https://github.com/phanithmin-source/AGYHub#readme",
   "bugs": {
-    "url": "https://github.com/porhong/ai-locker/issues"
+    "url": "https://github.com/phanithmin-source/AGYHub/issues"
   },
   "type": "module",
   "bin": {
+    "agyhub": "dist/cli.js",
+    "agy-hub": "dist/cli.js",
     "ai-locker": "dist/cli.js"
   },
   "files": [
@@ -39,8 +40,10 @@
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
-    "claude",
-    "claude-code",
+    "agyhub",
+    "antigravity",
+    "agy",
+    "gemini",
     "account",
     "switcher",
     "profiles",
@@ -59,8 +62,5 @@
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.40.0",
     "vitest": "^3.2.0"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

@@ -17,13 +17,30 @@ function powershellPath(): string {
 
 function script(op: 'Protect' | 'Unprotect', vaultId: string): string {
   if (!/^[0-9a-f]+$/i.test(vaultId)) throw new Error('invalid vault id');
+  if (op === 'Protect') {
+    return [
+      "$ErrorActionPreference = 'Stop'",
+      'Add-Type -AssemblyName System.Security',
+      '$in = [Console]::In.ReadToEnd().Trim()',
+      '$bytes = [Convert]::FromBase64String($in)',
+      `$entropy = [Text.Encoding]::UTF8.GetBytes('agyhub:${vaultId}')`,
+      `$out = [Security.Cryptography.ProtectedData]::Protect($bytes, $entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)`,
+      '[Console]::Out.Write([Convert]::ToBase64String($out))',
+    ].join('; ');
+  }
+  // Unprotect: try agyhub prefix, fallback to legacy ai-locker prefix
   return [
     "$ErrorActionPreference = 'Stop'",
     'Add-Type -AssemblyName System.Security',
     '$in = [Console]::In.ReadToEnd().Trim()',
     '$bytes = [Convert]::FromBase64String($in)',
-    `$entropy = [Text.Encoding]::UTF8.GetBytes('ai-locker:${vaultId}')`,
-    `$out = [Security.Cryptography.ProtectedData]::${op}($bytes, $entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)`,
+    'try {',
+    `  $entropy = [Text.Encoding]::UTF8.GetBytes('agyhub:${vaultId}')`,
+    `  $out = [Security.Cryptography.ProtectedData]::Unprotect($bytes, $entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)`,
+    '} catch {',
+    `  $entropy = [Text.Encoding]::UTF8.GetBytes('ai-locker:${vaultId}')`,
+    `  $out = [Security.Cryptography.ProtectedData]::Unprotect($bytes, $entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)`,
+    '}',
     '[Console]::Out.Write([Convert]::ToBase64String($out))',
   ].join('; ');
 }

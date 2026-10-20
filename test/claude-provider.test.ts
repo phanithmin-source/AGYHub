@@ -131,7 +131,7 @@ describe('process detection', () => {
     expect(
       isClaudeProcess({ pid: 1, name: 'node.exe', commandLine: 'node C:\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js' }),
     ).toBe(true);
-    expect(isClaudeProcess({ pid: 1, name: 'node', commandLine: 'node /x/ai-locker/dist/cli.js use work' })).toBe(false);
+    expect(isClaudeProcess({ pid: 1, name: 'node', commandLine: 'node /x/agyhub/dist/cli.js use work' })).toBe(false);
     expect(isClaudeProcess({ pid: 1, name: '/Applications/Claude.app/Contents/MacOS/Claude', commandLine: '' })).toBe(false);
     expect(
       isClaudeProcess({

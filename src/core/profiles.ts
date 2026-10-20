@@ -29,7 +29,7 @@ export function findProfile(manifest: Manifest, provider: string, ref: string): 
 export function requireProfile(manifest: Manifest, provider: string, ref: string): ProfileMeta {
   const p = findProfile(manifest, provider, ref);
   if (!p) {
-    throw new LockerError(`No profile named "${ref}".`, 'E_NOT_FOUND', 'Run `ai-locker list` to see saved profiles.');
+    throw new LockerError(`No profile named "${ref}".`, 'E_NOT_FOUND', 'Run `agyhub list` to see saved profiles.');
   }
   return p;
 }

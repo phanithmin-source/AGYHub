@@ -15,7 +15,7 @@ describe('Vault', () => {
     vault.manifest.profiles.push({
       id: 'abc',
       name: 'work',
-      provider: 'claude-code',
+      provider: 'agy',
       fingerprint: 'f',
       createdAt: '',
       updatedAt: '',
@@ -31,11 +31,11 @@ describe('Vault', () => {
 
   it('never stores secrets or profile names in plaintext', async () => {
     const { vault, paths } = await newVault();
-    await vault.writeProfile('abc', { secret: 'sk-ant-ort01-very-secret' });
-    vault.manifest.profiles.push({ id: 'abc', name: 'my-work-name', provider: 'claude-code', fingerprint: 'f', createdAt: '', updatedAt: '', email: 'me@corp.com' });
+    await vault.writeProfile('abc', { secret: 'ya29.very-secret-token' });
+    vault.manifest.profiles.push({ id: 'abc', name: 'my-work-name', provider: 'agy', fingerprint: 'f', createdAt: '', updatedAt: '', email: 'me@corp.com' });
     await vault.saveManifest();
     const all = [paths.vault, paths.profile('abc')].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
-    expect(all).not.toContain('sk-ant');
+    expect(all).not.toContain('ya29');
     expect(all).not.toContain('my-work-name');
     expect(all).not.toContain('me@corp.com');
   });
@@ -66,7 +66,7 @@ describe('Vault', () => {
   it('changes the passphrase and re-encrypts every profile under a new data key', async () => {
     const { vault, paths } = await newVault();
     await vault.writeProfile('p1', { t: 1 });
-    vault.manifest.profiles.push({ id: 'p1', name: 'p', provider: 'claude-code', fingerprint: 'f', createdAt: '', updatedAt: '' });
+    vault.manifest.profiles.push({ id: 'p1', name: 'p', provider: 'agy', fingerprint: 'f', createdAt: '', updatedAt: '' });
     await vault.saveManifest();
     const before = fs.readFileSync(paths.profile('p1'), 'utf8');
     await vault.changePassphrase('a brand new passphrase');
@@ -101,7 +101,7 @@ describe('Vault', () => {
   it('stores and clears the rollback record', async () => {
     const { vault } = await newVault();
     expect(await vault.readRollback()).toBeNull();
-    await vault.writeRollback({ provider: 'claude-code', takenAt: 'now', reason: 'test', snapshot: { x: 1 } });
+    await vault.writeRollback({ provider: 'agy', takenAt: 'now', reason: 'test', snapshot: { x: 1 } });
     expect((await vault.readRollback())?.snapshot).toEqual({ x: 1 });
     await vault.clearRollback();
     expect(await vault.readRollback()).toBeNull();

@@ -1,14 +1,10 @@
-import { defaultKdf, deriveKek, openJson, sealJson, subkey, type KdfParams, type Sealed } from '../vault/crypto.js';
-import { checkPassphrase, type ProfileMeta, type Vault } from '../vault/vault.js';
 import { LockerError } from '../util/errors.js';
+import { checkPassphrase, type ProfileMeta, type Vault } from '../vault/vault.js';
+import { defaultKdf, deriveKek, openJson, sealJson, subkey, type KdfParams, type Sealed } from '../vault/crypto.js';
 import { matchProfile, newProfileMeta, validateName } from './profiles.js';
 
-/**
- * Portable, passphrase-encrypted bundle for moving profiles to another machine. It uses
- * its own passphrase and KDF salt, independent of the vault it came from.
- */
 interface ExportFile {
-  format: 'ai-locker-export';
+  format: 'agyhub-export' | 'ai-locker-export';
   v: 1;
   createdAt: string;
   kdf: KdfParams;
@@ -19,7 +15,7 @@ interface ExportPayload {
   profiles: { meta: ProfileMeta; snapshot: unknown }[];
 }
 
-const AAD = 'ai-locker-export:v1';
+const aadFor = (format: string) => `${format}:v1`;
 
 export async function exportProfiles(vault: Vault, profiles: ProfileMeta[], passphrase: string): Promise<string> {
   checkPassphrase(passphrase);
@@ -31,11 +27,11 @@ export async function exportProfiles(vault: Vault, profiles: ProfileMeta[], pass
   const kek = await deriveKek(passphrase, kdf);
   try {
     const file: ExportFile = {
-      format: 'ai-locker-export',
+      format: 'agyhub-export',
       v: 1,
       createdAt: new Date().toISOString(),
       kdf,
-      payload: sealJson(subkey(kek, 'export'), payload, AAD),
+      payload: sealJson(subkey(kek, 'export'), payload, aadFor('agyhub-export')),
     };
     return JSON.stringify(file, null, 2) + '\n';
   } finally {
@@ -53,15 +49,15 @@ export async function importProfiles(vault: Vault, text: string, passphrase: str
   try {
     file = JSON.parse(text);
   } catch {
-    throw new LockerError('Not an ai-locker export file.', 'E_FORMAT');
+    throw new LockerError('Not an agyhub export file.', 'E_FORMAT');
   }
-  if (file?.format !== 'ai-locker-export' || file.v !== 1) {
-    throw new LockerError('Not an ai-locker export file, or an unsupported version.', 'E_FORMAT');
+  if ((file?.format !== 'agyhub-export' && file?.format !== 'ai-locker-export') || file.v !== 1) {
+    throw new LockerError('Not an agyhub export file, or an unsupported version.', 'E_FORMAT');
   }
   const kek = await deriveKek(passphrase, file.kdf);
   let payload: ExportPayload;
   try {
-    payload = openJson<ExportPayload>(subkey(kek, 'export'), file.payload, AAD);
+    payload = openJson<ExportPayload>(subkey(kek, 'export'), file.payload, aadFor(file.format));
   } catch (err) {
     if (err instanceof LockerError && err.code === 'E_DECRYPT') {
       throw new LockerError('Wrong export passphrase, or the file was modified.', 'E_BAD_PASSPHRASE');

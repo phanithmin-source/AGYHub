@@ -8,13 +8,17 @@ import { checkPassphrase, MIN_PASSPHRASE_LENGTH, Vault } from '../../vault/vault
 import { isInteractive, promptPassphrase, withVault, type GlobalOpts } from '../context.js';
 
 async function newPassphrase(label = 'New vault passphrase'): Promise<string> {
-  const fromEnv = process.env.AI_LOCKER_NEW_PASSPHRASE ?? process.env.AI_LOCKER_PASSPHRASE;
+  const fromEnv =
+    process.env.AGYHUB_NEW_PASSPHRASE ??
+    process.env.AI_LOCKER_NEW_PASSPHRASE ??
+    process.env.AGYHUB_PASSPHRASE ??
+    process.env.AI_LOCKER_PASSPHRASE;
   if (fromEnv !== undefined && !isInteractive()) {
     checkPassphrase(fromEnv);
     return fromEnv;
   }
   if (!isInteractive()) {
-    throw new LockerError('A passphrase is required.', 'E_NEED_PASSPHRASE', 'Set AI_LOCKER_PASSPHRASE or run in a terminal.');
+    throw new LockerError('A passphrase is required.', 'E_NEED_PASSPHRASE', 'Set AGYHUB_PASSPHRASE or run in a terminal.');
   }
   for (;;) {
     const first = await promptPassphrase(`${label} (min ${MIN_PASSPHRASE_LENGTH} chars)`);
@@ -33,7 +37,7 @@ async function newPassphrase(label = 'New vault passphrase'): Promise<string> {
 export function registerSetup(program: Command): void {
   program
     .command('init')
-    .description('create the encrypted vault (~/.ai-locker)')
+    .description('create the encrypted vault (~/.agyhub)')
     .option('--no-os-unlock', 'always ask for the passphrase; do not cache the vault key in the OS key store')
     .option('--scrypt', 'use scrypt instead of Argon2id (for vaults shared with Node < 24.7)')
     .action(async (opts: { osUnlock: boolean; scrypt?: boolean }, cmd: Command) => {
@@ -55,8 +59,8 @@ export function registerSetup(program: Command): void {
         info(c.green('✔ ') + `Vault created at ${paths.home}`);
         info(`  Key derivation: ${kdf.name}${kdf.name === 'scrypt' && !opts.scrypt && !hasArgon2 ? ' (Argon2id needs Node 24.7+)' : ''}`);
         info(`  OS unlock: ${vault.osUnlockEnabled ? 'on (no passphrase prompt for routine commands)' : 'off'}`);
-        info('\nNext: `ai-locker add <name> --from-live` to save the account you are logged in with now,');
-        info('      or `ai-locker add <name>` to log in to another account.');
+        info('\nNext: `agyhub add <name> --from-live` to save the account you are logged in with now,');
+        info('      or `agyhub add <name>` to log in to another account.');
       });
     });
 

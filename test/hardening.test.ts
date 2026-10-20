@@ -8,13 +8,13 @@ import { deriveKek, subkey, sealJson } from '../src/vault/crypto.js';
 import { addFromLive, switchTo, lockLive, type Ctx } from '../src/core/switchService.js';
 import { requireProfile } from '../src/core/profiles.js';
 import { exportProfiles, importProfiles } from '../src/core/transfer.js';
-import { FakeClaude, PASS, newVault, tempDir } from './helpers.js';
+import { FakeAgy, PASS, newVault, tempDir } from './helpers.js';
 
 describe('executable resolution (no binary planting)', () => {
   it('ignores the current directory and relative PATH entries', () => {
     const cwd = tempDir();
     const good = tempDir();
-    const exe = process.platform === 'win32' ? 'claude.exe' : 'claude';
+    const exe = process.platform === 'win32' ? 'agy.exe' : 'agy';
     fs.writeFileSync(path.join(cwd, exe), 'planted');
     fs.writeFileSync(path.join(good, exe), 'real', { mode: 0o755 });
     const sep = process.platform === 'win32' ? ';' : ':';
@@ -22,9 +22,9 @@ describe('executable resolution (no binary planting)', () => {
     process.chdir(cwd);
     try {
       const env = { PATH: ['.', '', 'relative/dir', good].join(sep) };
-      expect(resolveExecutable('claude', env)).toBe(path.join(good, exe));
-      expect(resolveExecutable('claude', { PATH: '.' })).toBeNull();
-      expect(resolveExecutable('./claude', env)).toBeNull();
+      expect(resolveExecutable('agy', env)).toBe(path.join(good, exe));
+      expect(resolveExecutable('agy', { PATH: '.' })).toBeNull();
+      expect(resolveExecutable('./agy', env)).toBeNull();
     } finally {
       process.chdir(prev);
     }
@@ -33,10 +33,11 @@ describe('executable resolution (no binary planting)', () => {
   it.runIf(process.platform === 'win32')('prefers a real .exe over an npm .cmd shim on Windows', () => {
     const a = tempDir();
     const b = tempDir();
-    fs.writeFileSync(path.join(a, 'claude.cmd'), '');
-    fs.writeFileSync(path.join(b, 'claude.exe'), '');
-    expect(resolveExecutable('claude', { PATH: `${a};${b}` }, 'win32')).toBe(path.win32.join(b, 'claude.exe'));
-  });});
+    fs.writeFileSync(path.join(a, 'agy.cmd'), '');
+    fs.writeFileSync(path.join(b, 'agy.exe'), '');
+    expect(resolveExecutable('agy', { PATH: `${a};${b}` }, 'win32')).toBe(path.win32.join(b, 'agy.exe'));
+  });
+});
 
 describe('vault lock', () => {
   it('never takes over a lock whose owner is still alive, however old', async () => {
@@ -48,7 +49,7 @@ describe('vault lock', () => {
 
 describe('interrupted operations', () => {
   it('blocks new operations until a pending rollback is resolved, so it is never overwritten', async () => {
-    const fake = new FakeClaude();
+    const fake = new FakeAgy();
     const { vault } = await newVault();
     const ctx: Ctx = { vault, provider: fake.provider() };
     fake.loginAs('bob');
@@ -56,9 +57,9 @@ describe('interrupted operations', () => {
     fake.loginAs('alice');
     await addFromLive(ctx, 'alice');
     // Simulate Ctrl+C during `add`: live store emptied, previous login only in the rollback record.
-    await vault.writeRollback({ provider: 'claude-code', takenAt: 't', reason: 'add x', snapshot: await ctx.provider.readLive() });
+    await vault.writeRollback({ provider: 'agy', takenAt: 't', reason: 'add x', snapshot: await ctx.provider.readLive() });
     await ctx.provider.clearLive();
-    const bob = requireProfile(vault.manifest, 'claude-code', 'bob');
+    const bob = requireProfile(vault.manifest, 'agy', 'bob');
     await expect(switchTo(ctx, bob)).rejects.toMatchObject({ code: 'E_PENDING_ROLLBACK' });
     await expect(lockLive(ctx)).rejects.toMatchObject({ code: 'E_PENDING_ROLLBACK' });
     expect((await vault.readRollback())?.reason).toBe('add x');
@@ -69,7 +70,7 @@ describe('passphrase change re-keys the vault', () => {
   it('old passphrase + old vault.json cannot decrypt profiles written afterwards', async () => {
     const { vault, paths } = await newVault();
     await vault.writeProfile('aa11', { t: 'before' });
-    vault.manifest.profiles.push({ id: 'aa11', name: 'x', provider: 'claude-code', fingerprint: 'f', createdAt: '', updatedAt: '' });
+    vault.manifest.profiles.push({ id: 'aa11', name: 'x', provider: 'agy', fingerprint: 'f', createdAt: '', updatedAt: '' });
     await vault.saveManifest();
     const oldVaultJson = fs.readFileSync(paths.vault, 'utf8');
 
@@ -93,7 +94,7 @@ describe('passphrase change re-keys the vault', () => {
   it('recovers from a crash before or after the commit point', async () => {
     const { vault, paths } = await newVault();
     await vault.writeProfile('bb22', { t: 1 });
-    vault.manifest.profiles.push({ id: 'bb22', name: 'y', provider: 'claude-code', fingerprint: 'f', createdAt: '', updatedAt: '' });
+    vault.manifest.profiles.push({ id: 'bb22', name: 'y', provider: 'agy', fingerprint: 'f', createdAt: '', updatedAt: '' });
     await vault.saveManifest();
     // Crash before commit: a staged file under some other key must be discarded.
     const junkKey = Buffer.alloc(32, 9);
@@ -112,7 +113,7 @@ describe('untrusted import files', () => {
   it('rejects absurd KDF parameters before deriving anything', async () => {
     const { vault } = await newVault();
     const evil = JSON.stringify({
-      format: 'ai-locker-export',
+      format: 'agyhub-export',
       v: 1,
       createdAt: '',
       kdf: { name: 'scrypt', N: 2 ** 30, r: 8, p: 1, salt: 'c2FsdHNhbHQ=' },
@@ -122,7 +123,7 @@ describe('untrusted import files', () => {
   });
 
   it('sanitises profile names from the bundle', async () => {
-    const fake = new FakeClaude();
+    const fake = new FakeAgy();
     const src = await newVault();
     fake.loginAs('alice');
     const meta = await addFromLive({ vault: src.vault, provider: fake.provider() }, 'alice');
